@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ms">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Modul Panel - Sistem SISC+ KPM</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Babel Compiler -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect } = React;
+
+      const SUPABASE_URL = 'https://beyxrxnuuwegkvziglmg.supabase.co';
+      const SUPABASE_KEY = 'sb_publishable_Ei-t0rPawbj3j8EpOOdAvQ_lwPz-oKO';
+      const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      function PanelApp() {
+        const [activePanel, setActivePanel] = useState(null);
+        const [inputKP, setInputKP] = useState('');
+        
+        const [allCandidates, setAllCandidates] = useState([]);
+        const [selectedSesi, setSelectedSesi] = useState('');
+        const [selectedKP, setSelectedKP] = useState('');
+        const [selectedCalon, setSelectedCalon] = useState(null);
+        
+        const [showPanduan, setShowPanduan] = useState(false);
+
+        const [scores, setScores] = useState({ 
+          skor_bimbingan: 0, skor_instruksional: 0, skor_pemikiran_strategik: 0, 
+          skor_analisis_data: 0, skor_interpersonal: 0, skor_evidens: 0 
+        });
+        const [ulasan, setUlasan] = useState('');
+        const [loading, setLoading] = useState(false);
+        const [message, setMessage] = useState({ type: '', text: '' });
+
+        // DATABASE RUBRIK BARS 5.1 KPM LENGKAP
+        const RUBRIK = [
+          { 
+            id: 'skor_bimbingan', nama: '1. Kompetensi Bimbingan Profesional (25%)', wajaran: 25,
+            deskriptor: {
+              5: "Mengemudi sesi bimbingan berasaskan keperluan guru. Menggunakan soalan reflektif secara mendalam. Mencetus perubahan amalan guru yang dapat dibuktikan. Menjadi rujukan kepakaran bimbingan pada peringkat PPD.",
+              4: "Melaksanakan sesi bimbingan secara sistematik. Menggunakan soalan reflektif yang sesuai. Membantu guru membina tindakan susulan yang jelas. Membimbing rakan pembimbing apabila diperlukan.",
+              3: "Melaksanakan sesi bimbingan mengikut struktur yang ditetapkan. Menggunakan soalan asas untuk mencungkil refleksi guru. Membantu guru mengenal pasti tindakan susulan yang sesuai.",
+              2: "Melaksanakan sebahagian langkah bimbingan dengan betul. Menggunakan soalan yang lebih bersifat arahan. Memerlukan panduan untuk membantu guru membina tindakan susulan.",
+              1: "Memberi arahan sebagai pendekatan utama. Jarang menggunakan soalan reflektif. Tidak membantu guru membina tindakan susulan yang jelas."
+            }
+          },
+          { 
+            id: 'skor_instruksional', nama: '2. Kompetensi Instruksional (20%)', wajaran: 20,
+            deskriptor: {
+              5: "Mentafsir dokumen kurikulum dengan tepat. Mengenal pasti jurang pelaksanaan berdasarkan evidens. Membimbing guru menjajarkan standard pembelajaran dengan objektif. Membimbing guru memilih strategi pedagogi yang sesuai. Membimbing guru menentukan pentaksiran yang selari dengan pembelajaran.",
+              4: "Mentafsir dokumen kurikulum dengan tepat. Mengenal pasti jurang pelaksanaan yang utama. Membimbing guru menjajarkan standard pembelajaran dengan objektif. Mencadangkan strategi pedagogi yang sesuai.",
+              3: "Menjelaskan struktur utama dokumen kurikulum dengan betul. Mengenal pasti keperluan asas pelaksanaan. Memberi cadangan pedagogi yang munasabah.",
+              2: "Mengenal pasti sebahagian komponen dokumen kurikulum. Penerangan tentang pelaksanaan masih umum. Cadangan pedagogi kurang berkaitan dengan standard pembelajaran.",
+              1: "Tidak dapat menjelaskan struktur utama dokumen kurikulum. Tidak dapat menghubungkan standard pembelajaran dengan pelaksanaan PdP. Cadangan pedagogi tidak relevan."
+            }
+          },
+          { 
+            id: 'skor_pemikiran_strategik', nama: '3. Kompetensi Pemikiran Strategik (20%)', wajaran: 20,
+            deskriptor: {
+              5: "Menganalisis isu daripada perspektif sistem. Mengenal pasti punca akar berdasarkan evidens. Menentukan keutamaan strategik. Membina tindakan jangka pendek yang relevan. Membina tindakan jangka panjang yang mampan. Menjangka risiko utama sebelum pelaksanaan.",
+              4: "Menganalisis isu secara menyeluruh. Mengenal pasti punca utama. Menilai beberapa pilihan tindakan. Menetapkan tindakan yang realistik. Menjangka risiko pelaksanaan yang ketara.",
+              3: "Mengenal pasti isu utama dengan tepat. Mengenal pasti punca yang munasabah. Mencadangkan tindakan yang boleh dilaksanakan.",
+              2: "Mengenal pasti simptom lebih jelas berbanding punca. Mencadangkan tindakan bersifat reaktif. Pertimbangan terhadap risiko masih terhad.",
+              1: "Tidak dapat mengenal pasti isu sebenar. Cadangan tindakan tidak menjawab punca masalah. Pertimbangan strategik tidak ditunjukkan."
+            }
+          },
+          { 
+            id: 'skor_analisis_data', nama: '4. Kompetensi Analisis Data (15%)', wajaran: 15,
+            deskriptor: {
+              5: "Menggunakan pelbagai sumber data yang relevan. Membuat triangulasi evidens. Mengenal pasti pola utama berdasarkan data. Mengenal pasti punca sebenar berdasarkan data. Menetapkan keutamaan tindakan berdasarkan dapatan. Merancang intervensi berasaskan evidens. Menjelaskan rasional keputusan dengan tepat.",
+              4: "Menggunakan lebih daripada satu sumber data yang relevan. Mengenal pasti pola yang konsisten. Mengenal pasti punca utama berdasarkan data. Menetapkan keutamaan tindakan yang sesuai. Merancang intervensi yang realistik.",
+              3: "Menggunakan data yang relevan. Mengenal pasti isu utama berdasarkan data. Mencadangkan intervensi yang sesuai. Justifikasi keputusan masih asas.",
+              2: "Menggunakan data secara terhad. Mengenal pasti sebahagian isu sahaja. Mencadangkan intervensi yang umum. Keutamaan tindakan tidak jelas.",
+              1: "Tidak menggunakan data sebagai asas pertimbangan. Tidak mengenal pasti isu sebenar. Mencadangkan intervensi yang tidak relevan. Rasional keputusan tidak dapat dijelaskan."
+            }
+          },
+          { 
+            id: 'skor_interpersonal', nama: '5. Kompetensi Interpersonal (10%)', wajaran: 10,
+            deskriptor: {
+              5: "Menyampaikan mesej secara jelas. Menyesuaikan gaya komunikasi mengikut pihak yang dihadapi. Menunjukkan empati melalui respons yang sesuai. Mengurus perbezaan pandangan secara profesional. Mengawal emosi secara konsisten. Meyakinkan pihak lain melalui hujah berasaskan fakta.",
+              4: "Menyampaikan mesej secara tersusun. Menyesuaikan gaya komunikasi mengikut situasi. Menunjukkan empati yang sesuai. Mengurus maklum balas secara profesional. Mengekalkan kawalan emosi ketika dicabar.",
+              3: "Menyampaikan mesej yang dapat difahami. Menunjukkan sikap profesional. Memberi respons yang sesuai terhadap pandangan pihak lain. Mengekalkan kawalan emosi dalam situasi biasa.",
+              2: "Menyampaikan jawapan yang kurang tersusun. Respons terhadap pandangan pihak lain masih umum. Menunjukkan kesukaran menyesuaikan gaya komunikasi. Kawalan emosi tidak konsisten ketika dicabar.",
+              1: "Menyampaikan mesej secara tidak jelas. Cenderung bersikap defensif apabila menerima kritikan. Menunjukkan reaksi emosi yang mengganggu interaksi profesional. Tidak menyesuaikan komunikasi mengikut situasi."
+            }
+          },
+          { 
+            id: 'skor_evidens', nama: '6. Evidens Profesional (10%)', wajaran: 10,
+            deskriptor: {
+              5: "Mengemukakan evidens yang sangat relevan dengan fungsi SISC+. Evidens dapat disahkan. Dokumen menunjukkan peranan calon sebagai peneraju bimbingan. Data menunjukkan perubahan amalan guru. Data menunjukkan impak intervensi. Calon menjelaskan hubungan evidens dengan kompetensi secara kritikal.",
+              4: "Mengemukakan evidens yang relevan dengan fungsi SISC+. Evidens dapat disahkan. Dokumen menunjukkan pengalaman bimbingan yang kukuh. Bukti pelaksanaan jelas. Bukti impak dapat dikenal pasti. Calon menjelaskan hubungan evidens dengan kompetensi secara tepat.",
+              3: "Mengemukakan evidens yang berkaitan dengan pengalaman profesional. Dokumen menunjukkan penglibatan calon. Bukti pelaksanaan dapat dikenal pasti. Bukti impak masih terhad. Calon memberi penjelasan asas tentang hubungan evidens dengan kompetensi.",
+              2: "Mengemukakan evidens yang kurang relevan dengan fungsi SISC+. Dokumen lebih banyak menunjukkan penyertaan. Bukti peranan bimbingan masih lemah. Bukti impak sukar dikenal pasti. Calon sukar menghubungkan evidens dengan kompetensi.",
+              1: "Mengemukakan evidens yang sangat minimum. Kesahihan evidens tidak dapat dipastikan. Dokumen tidak menunjukkan peranan bimbingan. Bukti impak tidak ditunjukkan. Hubungan evidens dengan fungsi SISC+ tidak dapat dijelaskan."
+            }
+          }
+        ];
+
+        const handleLoginPanel = async (e) => {
+          e.preventDefault();
+          setMessage({ type: '', text: '' });
+          const { data, error } = await supabase.from('panel_penemuduga').select('*').eq('no_kp', inputKP.trim()).single();
+
+          if (error || !data) {
+            setMessage({ type: 'error', text: 'No. Kad Pengenalan tidak dijumpai. Sila pastikan Urus Setia telah mendaftarkan profil anda.' });
+          } else {
+            setActivePanel(data);
+            fetchCalonByZon(data.zon_temuduga);
+          }
+        };
+
+        const fetchCalonByZon = async (zon) => {
+          const { data, error } = await supabase.from('calon').select('*').limit(1000);
+          if (!error && data) {
+            const calonZon = data.filter(c => String(c.zon_temuduga).trim().toUpperCase() === String(zon).trim().toUpperCase());
+            setAllCandidates(calonZon);
+          }
+        };
+
+        const availableSesi = [...new Set(allCandidates.map(c => c.sesi).filter(Boolean))].sort();
+        const filteredCalon = allCandidates.filter(c => String(c.sesi).trim() === String(selectedSesi).trim());
+
+        const handleSelectKP = (kp) => {
+          setSelectedKP(kp);
+          const calonFound = filteredCalon.find(c => String(c.no_kp).trim() === String(kp).trim());
+          setSelectedCalon(calonFound || null);
+        };
+
+        const calculateTotal = () => {
+          let total = 0;
+          RUBRIK.forEach(r => { total += ((scores[r.id] || 0) / 5) * r.wajaran; });
+          return total.toFixed(2);
+        };
+
+        const handleSubmitPenilaian = async (e) => {
+          e.preventDefault();
+          if (!selectedCalon) return alert('Sila pilih calon terlebih dahulu.');
+          if (Object.values(scores).some(val => val === 0)) return alert('Sila isi kesemua 6 skor domain penilaian.');
+
+          setLoading(true);
+          const total = calculateTotal();
+          const isPassed = total >= 75 && scores.skor_bimbingan >= 3 && scores.skor_instruksional >= 3 && scores.skor_pemikiran_strategik >= 3 && scores.skor_analisis_data >= 3;
+
+          const payload = {
+            nama_panel: activePanel.nama_penuh,
+            no_kp_calon: selectedCalon.no_kp,
+            zon: selectedCalon.zon_temuduga,
+            bilik: selectedCalon.bilik_temuduga,
+            ...scores,
+            jumlah_markah: parseFloat(total),
+            status_lulus: isPassed,
+            ulasan_panel: ulasan
+          };
+
+          const { error } = await supabase.from('penilaian_skor').insert([payload]);
+          if (error) {
+            setMessage({ type: 'error', text: 'Gagal menyimpan penilaian: ' + error.message });
+          } else {
+            setMessage({ type: 'success', text: 'Penilaian calon berjaya disimpan secara rasmi!' });
+            setScores({ skor_bimbingan: 0, skor_instruksional: 0, skor_pemikiran_strategik: 0, skor_analisis_data: 0, skor_interpersonal: 0, skor_evidens: 0 });
+            setUlasan('');
+            setSelectedCalon(null);
+            setSelectedKP('');
+          }
+          setLoading(false);
+        };
+
+        return (
+          <div className="min-h-screen flex flex-col">
+            {/* Header / Navbar */}
+            <div className="bg-slate-900 border-b border-amber-500/30 p-4 flex justify-between items-center px-8 shadow-xl">
+              <span className="font-extrabold text-lg text-amber-400 tracking-wider">MODUL PANEL PENEMUDUGA SISC+</span>
+              <div className="flex gap-3">
+                {activePanel && (
+                  <button onClick={() => { setActivePanel(null); setInputKP(''); setSelectedCalon(null); setMessage({type:'',text:''}); }} className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700 transition-all">
+                    Log Keluar Panel
+                  </button>
+                )}
+                <a href="index.html" className="px-4 py-2 rounded-lg text-sm font-bold bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all">
+                  Kembali ke Menu Utama
+                </a>
+              </div>
+            </div>
+
+            <div className="p-6 max-w-5xl mx-auto w-full flex-grow">
+              
+              {/* PAPARAN 1: LOG MASUK PANEL */}
+              {!activePanel ? (
+                <div className="bg-slate-900 border border-slate-800 p-10 rounded-2xl max-w-lg mx-auto my-12 shadow-2xl">
+                  <div className="text-center mb-8">
+                    <svg className="w-16 h-16 text-amber-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                    <h2 className="text-3xl font-extrabold text-amber-400">Log Masuk Panel</h2>
+                    <p className="text-slate-400 text-base mt-2">Sahkan identiti untuk memulakan sesi.</p>
+                  </div>
+
+                  {message.text && (
+                    <div className="p-4 mb-6 rounded-lg text-sm font-bold bg-red-900/80 text-red-200 border border-red-500 text-center">
+                      {message.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleLoginPanel} className="space-y-6">
+                    <div>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="No. Kad Pengenalan Panel (Cth: 750812015543)" 
+                        className="w-full p-4 border border-slate-700 rounded-xl bg-slate-950 text-slate-100 text-lg font-mono font-bold text-center focus:border-amber-500 focus:outline-none"
+                        value={inputKP}
+                        onChange={(e) => setInputKP(e.target.value)}
+                      />
+                    </div>
+                    <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold py-4 rounded-xl text-lg shadow-lg transition-all">
+                      Sahkan & Masuk
+                    </button>
+                  </form>
+                </div>
+              ) : (
+
+                /* PAPARAN 2: BORANG PENILAIAN */
+                <div>
+                  <div className="bg-slate-900 border-l-4 border-l-amber-500 p-6 rounded-2xl shadow-lg mb-8 flex justify-between items-center">
+                    <div>
+                      <p className="text-xs text-amber-400 font-extrabold uppercase tracking-wider">Panel Bertugas</p>
+                      <h2 className="text-2xl font-extrabold text-slate-100 mt-1">{activePanel.nama_penuh}</h2>
+                      <p className="text-sm text-slate-400 mt-1 font-semibold">{activePanel.jawatan} • {activePanel.tempat_bertugas}</p>
+                    </div>
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/50 px-5 py-2 rounded-full text-base font-extrabold uppercase shadow-sm">
+                      ZON {activePanel.zon_temuduga}
+                    </span>
+                  </div>
+
+                  {message.text && (
+                    <div className={`p-5 mb-8 rounded-xl text-base font-bold ${message.type === 'error' ? 'bg-red-900/80 text-red-200 border border-red-500' : 'bg-emerald-900/80 text-emerald-200 border border-emerald-500'}`}>
+                      {message.text}
+                    </div>
+                  )}
+
+                  <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-lg">
+                    <div>
+                      <label className="block text-sm font-bold uppercase text-amber-400 mb-3">1. Pilih Sesi Temu Duga</label>
+                      <select 
+                        className="w-full p-4 border border-slate-700 rounded-xl text-lg bg-slate-950 text-slate-100 font-semibold focus:border-amber-500 focus:outline-none"
+                        value={selectedSesi}
+                        onChange={(e) => { setSelectedSesi(e.target.value); setSelectedCalon(null); }}
+                      >
+                        <option value="">-- Senarai Sesi --</option>
+                        {availableSesi.map(sesi => (
+                          <option key={sesi} value={sesi}>{sesi}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold uppercase text-amber-400 mb-3">2. Pilih Calon</label>
+                      <select 
+                        className="w-full p-4 border border-slate-700 rounded-xl text-lg font-mono bg-slate-950 text-slate-100 font-semibold disabled:opacity-40 focus:border-amber-500 focus:outline-none"
+                        value={selectedKP}
+                        disabled={!selectedSesi}
+                        onChange={(e) => handleSelectKP(e.target.value)}
+                      >
+                        <option value="">-- Senarai Calon Dalam Sesi --</option>
+                        {filteredCalon.map(c => (
+                          <option key={c.no_kp} value={c.no_kp}>{c.no_kp} - {c.nama_penuh}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {selectedCalon && (
+                    <form onSubmit={handleSubmitPenilaian} className="space-y-8">
+                      
+                      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-md">
+                        <button 
+                          type="button" 
+                          onClick={() => setShowPanduan(!showPanduan)}
+                          className="w-full bg-slate-800 p-5 text-left font-extrabold text-amber-400 text-base flex justify-between items-center"
+                        >
+                          <span>📚 PANDUAN PENGGUNAAN BARS KPM (KLIK UNTUK {showPanduan ? 'TUTUP' : 'LIHAT'})</span>
+                          <span className="text-2xl">{showPanduan ? '▾' : '▸'}</span>
+                        </button>
+                        {showPanduan && (
+                          <div className="p-6 bg-slate-900 text-base text-slate-300 border-t border-slate-700 grid grid-cols-1 gap-4 leading-relaxed">
+                            <p><strong className="text-emerald-400">SKOR 5 (Unggul):</strong> Autonomi tinggi. Evidens impak jelas. Keupayaan mempengaruhi pihak lain.</p>
+                            <p><strong className="text-blue-400">SKOR 4 (Kukuh):</strong> Pelaksanaan konsisten. Keputusan tepat. Bimbingan minimum diperlukan.</p>
+                            <p><strong className="text-amber-400">SKOR 3 (Kompeten):</strong> Pelaksanaan memadai. Tindakan asas tepat. Impak belum mendalam.</p>
+                            <p><strong className="text-orange-400">SKOR 2 (Terhad):</strong> Pelaksanaan separa. Kebergantungan pada panduan masih ketara.</p>
+                            <p><strong className="text-red-400">SKOR 1 (Tidak Memadai):</strong> Evidens lemah. Tindakan tidak tepat. Kompetensi tidak dapat ditunjukkan.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-900 border border-amber-500/30 p-6 rounded-2xl text-base text-slate-200 shadow-md">
+                        <h3 className="font-extrabold text-amber-400 mb-4 uppercase tracking-wider border-b border-slate-800 pb-3">Profil Calon Ditaksir</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <p><strong>Nama Calon:</strong> {selectedCalon.nama_penuh}</p>
+                          <p><strong>No. Kad Pengenalan:</strong> <span className="font-mono text-amber-300 font-bold">{selectedCalon.no_kp}</span></p>
+                          <p><strong>PPD & Bilik:</strong> {selectedCalon.ppd || '-'} ({selectedCalon.bilik_temuduga})</p>
+                          <p><strong>SME Subjek:</strong> <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded font-extrabold border border-amber-500/30">{selectedCalon.sme_subjek}</span></p>
+                        </div>
+                      </div>
+
+                      {RUBRIK.map((r) => (
+                        <div key={r.id} className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-md">
+                          <h4 className="font-extrabold text-xl mb-6 text-amber-400">{r.nama}</h4>
+                          <div className="flex gap-4">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <button 
+                                key={s} 
+                                type="button" 
+                                onClick={() => setScores({ ...scores, [r.id]: s })} 
+                                className={`flex-1 py-5 rounded-xl text-lg font-extrabold border-2 transition-all ${scores[r.id] === s ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-105' : 'bg-slate-950 text-slate-300 border-slate-700 hover:bg-slate-800 hover:border-slate-500'}`}
+                              >
+                                SKOR {s}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          {scores[r.id] > 0 && (
+                            <div className="mt-6 p-6 bg-slate-950 border-l-4 border-amber-500 rounded-r-xl text-lg text-slate-200 leading-relaxed shadow-inner">
+                              <span className="text-amber-500 font-extrabold uppercase text-sm tracking-widest block mb-2">Deskriptor Penilaian Panel (Skor {scores[r.id]}):</span>
+                              {r.deskriptor[scores[r.id]]}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-md">
+                        <label className="block text-sm font-bold uppercase text-amber-400 mb-3">Ulasan Keseluruhan Penemuduga</label>
+                        <textarea 
+                          rows="4" 
+                          className="w-full p-5 border border-slate-700 rounded-xl text-lg bg-slate-950 text-slate-100 focus:border-amber-500 focus:outline-none" 
+                          value={ulasan} 
+                          onChange={(e) => setUlasan(e.target.value)} 
+                          placeholder="Taipkan ulasan ringkas mengenai kekuatan atau aspek peningkatan calon berdasarkan taksiran BARS..."
+                        ></textarea>
+                      </div>
+
+                      <div className="bg-slate-900 border border-amber-500/40 text-white p-8 rounded-2xl flex justify-between items-center shadow-2xl sticky bottom-6 z-10 backdrop-blur-md bg-opacity-95">
+                        <div>
+                          <p className="text-sm text-slate-400 uppercase font-bold tracking-wider">Jumlah Markah</p>
+                          <div className="text-5xl font-extrabold text-amber-400 mt-1">{calculateTotal()}%</div>
+                        </div>
+                        <button 
+                          type="submit" 
+                          disabled={loading} 
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold px-10 py-5 rounded-xl text-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)] transition-all disabled:opacity-50 disabled:shadow-none"
+                        >
+                          {loading ? 'Menyimpan Rekod...' : 'Simpan & Hantar Penilaian'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<PanelApp />);
+    </script>
+  </body>
+</html>
